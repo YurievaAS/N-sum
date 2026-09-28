@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Подбор комбинации по сумме</title>
+  <style>
+    body { font-family: -apple-system, Segoe UI, Arial, sans-serif; max-width: 960px; margin: 32px auto; padding: 0 16px; color: #222; }
+    h1 { font-size: 22px; }
+    h2 { font-size: 18px; margin-top: 36px; }
+    .card { border: 1px solid #ddd; border-radius: 8px; padding: 16px 20px; margin-bottom: 24px; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid #eee; font-size: 14px; }
+    th { background: #fafafa; }
+    .scroll-table { max-height: 320px; overflow-y: auto; border: 1px solid #eee; border-radius: 6px; }
+    form label { display: block; margin-top: 10px; font-size: 14px; font-weight: 600; }
+    input[type=text], input[type=number], input[type=file] { padding: 6px 8px; font-size: 14px; margin-top: 4px; width: 220px; }
+    button { margin-top: 16px; padding: 8px 18px; font-size: 14px; border: none; border-radius: 6px; background: #2563eb; color: white; cursor: pointer; }
+    button:hover { background: #1d4ed8; }
+    .flash { background: #fff7e6; border: 1px solid #ffd591; padding: 8px 12px; border-radius: 6px; margin-bottom: 16px; }
+    .error { background: #fff1f0; border: 1px solid #ffa39e; padding: 8px 12px; border-radius: 6px; margin-bottom: 16px; }
+    .combo { border: 1px solid #e6f4ea; background: #f6fffa; border-radius: 6px; padding: 10px 14px; margin-bottom: 10px; }
+    .combo .sum { font-weight: 700; margin-bottom: 8px; }
+    .combo table { background: white; }
+    .no-result { background: #fff1f0; border: 1px solid #ffa39e; padding: 10px 14px; border-radius: 6px; }
+    .muted { color: #888; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h1>Подбор комбинации элементов под сумму N</h1>
+
+  {% with messages = get_flashed_messages() %}
+    {% if messages %}
+      {% for m in messages %}
+        <div class="flash">{{ m }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <div class="card">
+    <h2 style="margin-top:0">Текущий список ({{ rows|length }} записей, сумма всех: {{ "%.2f"|format(total_sum) }})</h2>
+
+    <form method="post" action="{{ url_for('upload') }}" enctype="multipart/form-data" style="margin-bottom:10px;">
+      <label>Загрузить другой Excel-файл (.xlsx, колонки: Наименование | Величина)</label>
+      <input type="file" name="excel_file" accept=".xlsx,.xls">
+      <button type="submit">Загрузить</button>
+    </form>
+
+    <form method="post" action="{{ url_for('refresh') }}" style="margin-bottom:16px;">
+      <button type="submit" style="background:#059669;">Обновить список (перечитать текущий файл)</button>
+      <span class="muted">— если файл на диске был заменён/перезаписан под тем же именем, эта кнопка подхватит изменения без повторной загрузки</span>
+    </form>
+
+    <div class="scroll-table">
+      <table>
+        <thead><tr><th>#</th><th>Наименование</th><th>Величина</th></tr></thead>
+        <tbody>
+          {% for name, value in rows %}
+          <tr><td>{{ loop.index }}</td><td>{{ name }}</td><td>{{ value }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">Найти комбинацию с суммой ≈ N</h2>
+
+    {% if error %}
+      <div class="error">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" action="{{ url_for('calculate') }}">
+      <label for="target_n">Сумма N</label>
+      <input type="text" id="target_n" name="target_n" value="{{ target_n or '' }}" placeholder="например, 100000" required>
+
+      <label for="epsilon">Погрешность, % (только в плюс, необязательно, по умолчанию 2)</label>
+      <input type="text" id="epsilon" name="epsilon" value="{{ epsilon }}" placeholder="2">
+
+      <button type="submit">Рассчитать</button>
+    </form>
+  </div>
+
+  {% if combos is not none %}
+    <div class="card">
+      <h2 style="margin-top:0">Результат</h2>
+      {% if combos|length == 0 %}
+        <div class="no-result">нет подходящих комбинаций</div>
+      {% else %}
+        <p class="muted">Диапазон поиска: [N; N + {{ epsilon }}%]. Показаны до 5 комбинаций, отсортированных по близости к N.</p>
+        {% for c in combos %}
+          <div class="combo">
+            <div class="sum">Сумма: {{ "%.2f"|format(c.total) }} (превышение над N: {{ "%.2f"|format(c.excess_percent) }}%), элементов: {{ c.elements|length }}</div>
+            <table>
+              <thead><tr><th>#</th><th>Наименование</th><th>Величина</th></tr></thead>
+              <tbody>
+                {% for e in c.elements %}
+                <tr><td>{{ loop.index }}</td><td>{{ e.name }}</td><td>{{ "%.2f"|format(e.value) }}</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% if not loop.last %}<div class="muted" style="margin: 12px 0;">— Следующий набор —</div>{% endif %}
+        {% endfor %}
+      {% endif %}
+    </div>
+  {% endif %}
+</body>
+</html>
